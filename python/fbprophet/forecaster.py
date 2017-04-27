@@ -884,12 +884,13 @@ class Prophet(object):
         -------
         A matplotlib figure.
         """
+
         if ax is None:
             fig = plt.figure(facecolor='w', figsize=(10, 6))
             ax = fig.add_subplot(111)
         else:
             fig = ax.get_figure()
-        ax.plot(self.history['ds'].values, self.history['y'], 'k.')
+        ax.plot(self.history['ds'].values, self.history['y'], 'k')
         ax.plot(fcst['ds'].values, fcst['yhat'], ls='-', c='#0072B2')
         if 'cap' in fcst and plot_cap:
             ax.plot(fcst['ds'].values, fcst['cap'], ls='--', c='k')
@@ -904,7 +905,7 @@ class Prophet(object):
         return fig
 
     def plot_components(self, fcst, uncertainty=True, plot_cap=True,
-                        weekly_start=0, yearly_start=0):
+                        weekly_start=0, yearly_start=0, daily_start=0):
         """Plot the Prophet forecast components.
 
         Will plot whichever are available of: trend, holidays, weekly
@@ -931,13 +932,16 @@ class Prophet(object):
         components = [('trend', True),
                       ('holidays', self.holidays is not None),
                       ('weekly', 'weekly' in fcst),
-                      ('yearly', 'yearly' in fcst)]
+                      ('yearly', 'yearly' in fcst),
+                      ('daily', 'daily' in fcst)]
+
         components = [plot for plot, cond in components if cond]
         npanel = len(components)
 
-        fig, axes = plt.subplots(npanel, 1, facecolor='w',
-                                 figsize=(9, 3 * npanel))
+        fig, axes = plt.subplots(npanel, 1, facecolor='w', figsize=(20, 6 * npanel))
 
+        print(components)
+        print(axes)
         for ax, plot in zip(axes, components):
             if plot == 'trend':
                 self.plot_trend(
@@ -950,6 +954,9 @@ class Prophet(object):
             elif plot == 'yearly':
                 self.plot_yearly(
                     ax=ax, uncertainty=uncertainty, yearly_start=yearly_start)
+            elif plot == 'daily':
+                self.plot_daily(
+                    ax=ax, uncertainty=uncertainty, daily_start=daily_start)
 
         fig.tight_layout()
         return fig
@@ -972,7 +979,7 @@ class Prophet(object):
 
         artists = []
         if not ax:
-            fig = plt.figure(facecolor='w', figsize=(10, 6))
+            fig = plt.figure(facecolor='w', figsize=(20, 10))
             ax = fig.add_subplot(111)
         artists += ax.plot(fcst['ds'].values, fcst['trend'], ls='-',
                            c='#0072B2')
@@ -1021,6 +1028,43 @@ class Prophet(object):
         ax.grid(True, which='major', c='gray', ls='-', lw=1, alpha=0.2)
         ax.set_xlabel('ds')
         ax.set_ylabel('holidays')
+        return artists
+
+    def plot_daily(self, ax=None, uncertainty=True, daily_start=0):
+        """Plot the daily component of the forecast.
+
+        Parameters
+        ----------
+        ax: Optional matplotlib Axes to plot on. One will be created if
+            this is not provided.
+        uncertainty: Optional boolean to plot uncertainty intervals.
+        daily_start: Optional int specifying the start day of the yearly
+            seasonality plot. 0 (default) starts the year on Jan 1. 1 shifts
+            by 1 day to Jan 2, and so on.
+
+        Returns
+        -------
+        a list of matplotlib artists
+        """
+        artists = []
+        if not ax:
+            fig = plt.figure(facecolor='w', figsize=(20, 10))
+            ax = fig.add_subplot(111)
+        # Compute yearly seasonality for a Jan 1 - Dec 31 sequence of dates.
+        df_y = pd.DataFrame(
+            {'ds': pd.date_range(start='2017-01-01', periods=365) +
+                   pd.Timedelta(days=daily_start), 'cap': 1.})
+        df_y = self.setup_dataframe(df_y)
+        seas = self.predict_seasonal_components(df_y)
+        artists += ax.plot(df_y['ds'], seas['daily'], ls='-',
+                           c='#0072B2')
+        if uncertainty:
+            artists += [ax.fill_between(
+                df_y['ds'].values, seas['daily_lower'],
+                seas['daily_upper'], color='#0072B2', alpha=0.2)]
+        ax.grid(True, which='major', c='gray', ls='-', lw=1, alpha=0.2)
+        ax.set_xlabel('ds')
+        ax.set_ylabel('seasonality')
         return artists
 
     def plot_weekly(self, ax=None, uncertainty=True, weekly_start=0):
@@ -1103,6 +1147,4 @@ class Prophet(object):
         ax.set_xlabel('Day of year')
         ax.set_ylabel('yearly')
         return artists
-
-
 # fb-block 9
